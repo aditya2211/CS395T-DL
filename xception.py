@@ -14,7 +14,7 @@ import argparse
 import imghdr
 import pickle as pkl
 import datetime
-from config import *
+import config 
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parser = argparse.ArgumentParser()
@@ -106,11 +106,14 @@ def main(args):
     # instantiate pre-trained Xception model
     # the default input shape is (299, 299, 3)
     # NOTE: the top classifier is not included
+    base_model = eval(args.model_name)(include_top=False, weights='imagenet', input_shape=(261,150,3))
+
+    """
     if args.model_name == "Xception":
         base_model = Xception(include_top=False, weights='imagenet', input_shape=(261,150,3))
     elif args.model_name == "VGG19":
         base_model = VGG19(include_top=False, weights='imagenet', input_shape=(261,150,3))
-
+    """
     # create a custom top classifier
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
