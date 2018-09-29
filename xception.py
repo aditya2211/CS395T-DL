@@ -1,4 +1,5 @@
 from keras.applications.xception import Xception, preprocess_input
+from keras.applications.vgg19 import VGG19
 from keras.optimizers import Adam
 from keras.preprocessing import image
 from keras.losses import categorical_crossentropy
@@ -16,8 +17,9 @@ import datetime
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset_root', default= '/scratch/cluster/agupta/cs395t/geo')
-parser.add_argument('--result_root', default='/scratch/cluster/agupta/cs395t/geo_xception_results')
+parser.add_argument('--dataset_root', default= '/scratch/cluster/tanya/geo/')
+parser.add_argument('--result_root', default='/scratch/cluster/tanya/geo/geo_xception_results')
+parser.add_argument('--model_name', default= 'VGG19')
 parser.add_argument('--epochs_pre', type=int, default=5)
 parser.add_argument('--epochs_fine', type=int, default=5)
 parser.add_argument('--batch_size_pre', type=int, default=32)
@@ -68,7 +70,6 @@ def main(args):
     for image_name in os.listdir(os.path.join(args.dataset_root, 'train')):
         path = os.path.join(os.path.join(args.dataset_root, 'train'), image_name)
         if imghdr.what(path) == None:
-            # this is not an image file
             continue
         train_labels.append(values[image_name])
         train_input_paths.append(path)
@@ -104,7 +105,10 @@ def main(args):
     # instantiate pre-trained Xception model
     # the default input shape is (299, 299, 3)
     # NOTE: the top classifier is not included
-    base_model = Xception(include_top=False, weights='imagenet', input_shape=(261,150,3))
+    if args.model_name == "Xception":
+        base_model = Xception(include_top=False, weights='imagenet', input_shape=(261,150,3))
+    elif args.model_name == "VGG19":
+        base_model = VGG19(include_top=False, weights='imagenet', input_shape=(261,150,3))
 
     # create a custom top classifier
     x = base_model.output
@@ -144,7 +148,7 @@ def main(args):
         verbose=1,
         callbacks=[
             ModelCheckpoint(
-                filepath=os.path.join(args.result_root, 'model_pre_ep{epoch}_agupta{val_loss:.3f}.h5'),
+                filepath=os.path.join(args.result_root, 'model_pre_ep{epoch}_{val_loss:.3f}.h5'),
                 period=args.snapshot_period_pre,
             ),
         ],
