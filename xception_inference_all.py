@@ -11,22 +11,35 @@ parser = argparse.ArgumentParser()
 parser.add_argument('model')
 parser.add_argument('valid_image_path')
 parser.add_argument('output_file')
+parser.add_argument('--batch_size', type=int, default=50)
 def main(args):
 
     # create model
     model = load_model(args.model)
     f = open(args.output_file,'w')
 
-    for image_name in os.listdir(args.valid_image_path):
-    # load an input image
-        img = image.load_img(os.path.join(args.valid_image_path,image_name), target_size=(261, 150))
-        x = image.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
+    num_samples = len(os.listdir(args.valid_image_path))
 
-	    # predict
-        pred = model.predict(x)[0]
-        f.write("%s\t%f\t%f\n" %(image_name, pred[0], pred[1]))
+    valid_image_paths = []
+    for image_name in os.listdir(args.valid_image_path):
+        valid_image_paths.append(os.path.join(args.valid_image_path,image_name))
+
+    
+    for i in range(0, num_samples, args.batch_size):
+        batch_inputs = list(map(
+                lambda x: image.load_img(x, target_size=(261,150)),
+                valid_image_paths[i:i+args.batch_size]
+            ))
+        batch_inputs = np.array(list(map(
+                lambda x: image.img_to_array(x),
+                batch_inputs
+            )))
+
+        batch_inputs = preprocess_input(batch_inputs)
+        pred = model.predict(batch_inputs)
+        
+        for j in range(args.batch_size):
+            f.write("%s\t%f\t%f\n" %(valid_image_paths[i+j], pred[j][0], pred[j][1]))
 
     f.close()
 if __name__ == '__main__':
