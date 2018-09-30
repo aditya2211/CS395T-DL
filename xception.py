@@ -6,7 +6,8 @@ from keras.losses import categorical_crossentropy
 from keras.layers import Dense, GlobalAveragePooling2D
 from keras.models import Model
 from keras.utils import to_categorical
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, TensorBoard
+from time import time
 import math
 import numpy as np
 import os
@@ -21,6 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_root', default= config.dataset_root)
 parser.add_argument('--result_root', default= config.result_root)
 parser.add_argument('--model_name', default= config.model_name)
+parser.add_argument('--logging_root', default = config.logging_root)
 parser.add_argument('--epochs_pre', type=int, default=5)
 parser.add_argument('--epochs_fine', type=int, default=5)
 parser.add_argument('--batch_size_pre', type=int, default=32)
@@ -133,7 +135,7 @@ def main(args):
         loss='mean_squared_error',
         optimizer=Adam(lr=args.lr_pre),
     )
-
+    tensorboard = TensorBoard(log_dir = "{}/{}".format(args.logging_root,time()))
     # train
     hist_pre = model.fit_generator(
         generator=generate_from_paths_and_labels(
@@ -150,7 +152,7 @@ def main(args):
         ),
         validation_steps=math.ceil(len(val_input_paths) / args.batch_size_pre),
         verbose=1,
-        callbacks=[
+        callbacks=[tensorboard,
             ModelCheckpoint(
                 filepath=os.path.join(args.result_root, 'model_pre_ep{epoch}_{val_loss:.3f}.h5'),
                 period=args.snapshot_period_pre,
@@ -187,7 +189,7 @@ def main(args):
         ),
         validation_steps=math.ceil(len(val_input_paths) / args.batch_size_fine),
         verbose=1,
-        callbacks=[
+        callbacks=[tensorboard,
             ModelCheckpoint(
                 filepath=os.path.join(args.result_root, 'model_fine_ep{epoch}_agupta{val_loss:.3f}.h5'),
                 period=args.snapshot_period_fine,
