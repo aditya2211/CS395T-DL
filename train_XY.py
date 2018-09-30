@@ -145,7 +145,7 @@ def main(args):
         loss='mean_squared_error',
         optimizer=Adam(lr=args.lr_pre),
     )
-    tensorboard = TensorBoard(log_dir = "{}/{}".format(args.logging_root,time()))
+    tensorboard = TensorBoard(log_dir = "{}_{}/{}".format(args.logging_root,args.model_name, time()))
     # train
     hist_pre = model.fit_generator(
         generator=generate_from_paths_and_labels(
