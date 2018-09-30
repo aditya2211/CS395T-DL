@@ -1,5 +1,7 @@
 from keras.applications.xception import Xception, preprocess_input
 from keras.applications.vgg19 import VGG19
+from keras.applications.inception_v3 import InceptionV3
+from keras.applications.resnet50 import ResNet50
 from keras.optimizers import Adam
 from keras.preprocessing import image
 from keras.losses import categorical_crossentropy
@@ -32,7 +34,7 @@ parser.add_argument('--lr_fine', type=float, default=1e-4)
 parser.add_argument('--snapshot_period_pre', type=int, default=1)
 parser.add_argument('--snapshot_period_fine', type=int, default=1)
 
-def generate_from_paths_and_labels(input_paths, labels, batch_size, input_size=(261,150)):
+def generate_from_paths_and_labels(input_paths, labels, batch_size, input_size=(261,200)):
     labels = np.array(labels)
     num_samples = len(input_paths)
     while 1:
@@ -60,7 +62,6 @@ def main(args):
     epochs = args.epochs_pre + args.epochs_fine
     args.dataset_root = os.path.expanduser(args.dataset_root)
     args.result_root = os.path.expanduser(args.result_root)
-
 
     # make input_paths and labels
 
@@ -102,13 +103,17 @@ def main(args):
     if os.path.exists(args.result_root) == False:
         os.makedirs(args.result_root)
 
+    if os.path.exists(os.path.join(args.result_root, args.model_name)) == False:
+        os.makedirs(os.path.join(args.result_root, args.model_name))
+
+    model_path = os.path.join(args.result_root, args.model_name)
     # ====================================================
     # Build a custom Xception
     # ====================================================
     # instantiate pre-trained Xception model
     # the default input shape is (299, 299, 3)
     # NOTE: the top classifier is not included
-    base_model = eval(args.model_name)(include_top=False, weights='imagenet', input_shape=(261,150,3))
+    base_model = eval(args.model_name)(include_top=False, weights='imagenet', input_shape=(261,200,3))
 
     """
     if args.model_name == "Xception":
@@ -154,12 +159,12 @@ def main(args):
         verbose=1,
         callbacks=[tensorboard,
             ModelCheckpoint(
-                filepath=os.path.join(args.result_root, 'model_pre_ep{epoch}_{val_loss:.3f}.h5'),
+                filepath=os.path.join(model_path, 'model_pre_ep{epoch}_{val_loss:.3f}.h5'),
                 period=args.snapshot_period_pre,
             ),
         ],
     )
-    model.save(os.path.join(args.result_root, 'model_pre_final.h5'))
+    model.save(os.path.join(model_path, 'model_pre_final.h5'))
 
     # ====================================================
     # Train the whole model
@@ -191,12 +196,12 @@ def main(args):
         verbose=1,
         callbacks=[tensorboard,
             ModelCheckpoint(
-                filepath=os.path.join(args.result_root, 'model_fine_ep{epoch}_agupta{val_loss:.3f}.h5'),
+                filepath=os.path.join(model_path, 'model_fine_ep{epoch}_agupta{val_loss:.3f}.h5'),
                 period=args.snapshot_period_fine,
             ),
         ],
     )
-    model.save(os.path.join(args.result_root, 'model_fine_final.h5'))
+    model.save(os.path.join(model_path, 'model_fine_final.h5'))
 
 
 if __name__ == '__main__':
