@@ -117,10 +117,6 @@ def main(args):
     train_grid_labels = gridify(train_labels, grid)
     val_grid_labels = gridify(val_labels, grid)
 
-    train_grid_labels = to_categorical(train_grid_labels)
-    val_grid_labels = to_categorical(val_grid_labels)    
-
-
     # convert to numpy array
     train_input_paths = np.array(train_input_paths)
     val_input_paths = np.array(val_input_paths)
@@ -174,7 +170,7 @@ def main(args):
         val_l = val_labels
     elif config.loss_type == "classification":
         model.compile(
-            loss='categorical_crossentropy',
+            loss='sparse_categorical_crossentropy',
             optimizer=Adam(lr=args.lr_pre),
         )
         train_l = train_grid_labels
@@ -221,7 +217,7 @@ def main(args):
         )
     elif config.loss_type == "classification":
         model.compile(
-            loss='categorical_crossentropy',
+            loss='sparse_categorical_crossentropy',
             optimizer=Adam(lr=args.lr_pre),
         )
 
