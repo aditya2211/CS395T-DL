@@ -9,6 +9,7 @@ from keras.layers import Dense, GlobalAveragePooling2D
 from keras.models import Model
 from keras.utils import to_categorical
 from keras.callbacks import ModelCheckpoint, TensorBoard
+from keras.utils.np_utils import to_categorical
 from time import time
 import math
 import numpy as np
@@ -53,6 +54,26 @@ def generate_from_paths_and_labels(input_paths, labels, batch_size, input_size=(
             inputs = preprocess_input(inputs)
             yield (inputs, labels[i:i+batch_size])
 
+def create_grid(coordinates):
+    lat_min = np.min([x[0] for x in coordinates])
+    lat_max = np.max([x[0] for x in coordinates])
+    lon_min = np.min([x[1] for x in coordinates])
+    lon_max = np.max([x[1] for x in coordinates])
+
+    x_coords = np.arange(lat_min, lat_max, 0.5)
+    y_coords = np.arange(lon_min, lon_max, 0.5)
+    
+    return [x_coords, y_coords]
+
+def gridify(labels, grid):
+
+    grid_labels = []
+    for l in labels:
+        lat_index  = np.argmin((l[0]-grid[0])**2)
+        long_index = np.argmin((l[1]-grid[1])**2)
+        grid_labels.append(lat_index * len(grid[0]) + long_index)
+    return grid_labels
+
 def main(args):
 
     # ====================================================
@@ -91,6 +112,14 @@ def main(args):
         val_labels.append(values[image_name])
         val_input_paths.append(path)
     # convert to one-hot-vector format
+
+    grid = create_grid(train_labels)
+    train_grid_labels = gridify(train_labels, grid)
+    val_grid_labels = gridify(val_labels, grid)
+
+    train_grid_labels = to_categorical(train_grid_labels)
+    val_grid_labels = to_categorical(val_grid_labels)    
+
 
     # convert to numpy array
     train_input_paths = np.array(train_input_paths)
@@ -136,23 +165,34 @@ def main(args):
         layer.trainable = False
 
     # compile model
-    model.compile(
-        loss='mean_squared_error',
-        optimizer=Adam(lr=args.lr_pre),
-    )
+    if config.loss_type == "regression":
+        model.compile(
+            loss='mean_squared_error',
+            optimizer=Adam(lr=args.lr_pre),
+        )
+        train_l = train_labels
+        val_l = val_labels
+    elif config.loss_type == "classification":
+        model.compile(
+            loss='categorical_crossentropy',
+            optimizer=Adam(lr=args.lr_pre),
+        )
+        train_l = train_grid_labels
+        val_l = val_grid_labels
+
     tensorboard = TensorBoard(log_dir = "{}/{}".format(args.logging_root,time()))
     # train
     hist_pre = model.fit_generator(
         generator=generate_from_paths_and_labels(
             input_paths=train_input_paths,
-            labels=train_labels,
+            labels=train_l,
             batch_size=args.batch_size_pre
         ),
         steps_per_epoch=math.ceil(len(train_input_paths) / args.batch_size_pre),
         epochs=args.epochs_pre,
         validation_data=generate_from_paths_and_labels(
             input_paths=val_input_paths,
-            labels=val_labels,
+            labels=val_l,
             batch_size=args.batch_size_pre
         ),
         validation_steps=math.ceil(len(val_input_paths) / args.batch_size_pre),
@@ -174,29 +214,36 @@ def main(args):
         layer.trainable = True
 
     # recompile
-    model.compile(
-        optimizer=Adam(lr=args.lr_fine),
-        loss='mean_squared_error',)
+    if config.loss_type == "regression":
+        model.compile(
+            loss='mean_squared_error',
+            optimizer=Adam(lr=args.lr_pre),
+        )
+    elif config.loss_type == "classification":
+        model.compile(
+            loss='categorical_crossentropy',
+            optimizer=Adam(lr=args.lr_pre),
+        )
 
     # train
     hist_fine = model.fit_generator(
         generator=generate_from_paths_and_labels(
             input_paths=train_input_paths,
-            labels=train_labels,
+            labels=train_l,
             batch_size=args.batch_size_fine
         ),
         steps_per_epoch=math.ceil(len(train_input_paths) / args.batch_size_fine),
         epochs=args.epochs_fine,
         validation_data=generate_from_paths_and_labels(
             input_paths=val_input_paths,
-            labels=val_labels,
+            labels=val_l,
             batch_size=args.batch_size_fine
         ),
         validation_steps=math.ceil(len(val_input_paths) / args.batch_size_fine),
         verbose=1,
         callbacks=[tensorboard,
             ModelCheckpoint(
-                filepath=os.path.join(model_path, 'model_fine_ep{epoch}_agupta{val_loss:.3f}.h5'),
+                filepath=os.path.join(model_path, 'model_fine_ep{epoch}_{val_loss:.3f}.h5'),
                 period=args.snapshot_period_fine,
             ),
         ],
