@@ -132,6 +132,8 @@ def main(args):
         os.makedirs(os.path.join(args.result_root, args.model_name))
 
     model_path = os.path.join(args.result_root, args.model_name)
+    with open(os.path.join(model_path, 'grid.pkl'), 'wb') as gridpickle:
+        pkl.dump(grid, gridpickle)
     # ====================================================
     # Build a custom Xception
     # ====================================================
