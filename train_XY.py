@@ -33,7 +33,7 @@ parser.add_argument('--dataset_root', default= config.dataset_root)
 parser.add_argument('--result_root', default= config.result_root)
 parser.add_argument('--model_name', default= config.model_name)
 parser.add_argument('--logging_root', default = config.logging_root)
-parser.add_argument('--epochs_pre', type=int, default=5)
+parser.add_argument('--epochs_pre', type=int, default=10)
 parser.add_argument('--epochs_fine', type=int, default=5)
 parser.add_argument('--batch_size_pre', type=int, default=32)
 parser.add_argument('--batch_size_fine', type=int, default=16)
@@ -41,6 +41,7 @@ parser.add_argument('--lr_pre', type=float, default=1e-3)
 parser.add_argument('--lr_fine', type=float, default=1e-4)
 parser.add_argument('--snapshot_period_pre', type=int, default=1)
 parser.add_argument('--snapshot_period_fine', type=int, default=1)
+parser.add_argument('--convertToLatLong', acion="store_true", default = False)
 
 def generate_from_paths_and_labels(input_paths, labels, batch_size, input_size=(261,150)):
     labels = np.array(labels)
@@ -78,7 +79,7 @@ def main(args):
     train_input_paths, train_labels, values = [], [], {}
     for label in open(os.path.join(args.dataset_root, 'geo_train.txt'), 'r'):
         gold_tags = label.rstrip().split('\t')
-        values[gold_tags[0]] = coordinateToXY(np.array([[float(gold_tags[2]), float(gold_tags[1])]]))[0]
+        values[gold_tags[0]] = coordinateToXY(np.array([[float(gold_tags[1]), float(gold_tags[2])]]))[0]
 
     for image_name in os.listdir(os.path.join(args.dataset_root, 'train')):
         path = os.path.join(os.path.join(args.dataset_root, 'train'), image_name)
@@ -90,7 +91,7 @@ def main(args):
     val_input_paths, val_labels, values = [], [], {}
     for label in open(os.path.join(args.dataset_root, 'geo_valid.txt'), 'r'):
         gold_tags = label.rstrip().split('\t')
-        values[gold_tags[0]] = coordinateToXY(np.array([[float(gold_tags[2]), float(gold_tags[1])]]))[0]
+        values[gold_tags[0]] = coordinateToXY(np.array([[float(gold_tags[1]), float(gold_tags[2])]]))[0]
 
     for image_name in os.listdir(os.path.join(args.dataset_root, 'valid')):
         path = os.path.join(os.path.join(args.dataset_root, 'valid'), image_name)
@@ -145,7 +146,7 @@ def main(args):
         loss='mean_squared_error',
         optimizer=Adam(lr=args.lr_pre),
     )
-    tensorboard = TensorBoard(log_dir = "{}_{}/{}".format(args.logging_root,args.model_name, time()))
+    tensorboard = TensorBoard(log_dir = "{}/{}/{}".format(args.logging_root,args.model_name, time()))
     # train
     hist_pre = model.fit_generator(
         generator=generate_from_paths_and_labels(
