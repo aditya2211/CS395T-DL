@@ -71,7 +71,7 @@ def gridify(labels, grid):
     for l in labels:
         lat_index  = np.argmin((l[0]-grid[0])**2)
         long_index = np.argmin((l[1]-grid[1])**2)
-        grid_labels.append(lat_index * len(grid[0]) + long_index)
+        grid_labels.append(lat_index * len(grid[1]) + long_index)
     return grid_labels
 
 def main(args):
@@ -150,7 +150,10 @@ def main(args):
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
     x = Dense(1024, activation='relu')(x)
-    predictions = Dense((len(grid[0]) - 1) * len(grid[0]) + len(grid[1]))(x)
+    if config.loss_type == "regression":
+        predictions = Dense(2)(x)
+    elif config.loss_type == "classification":
+        predictions = Dense(len(grid[0])*len(grid[1]), activation='softmax')(x)
     model = Model(inputs=base_model.inputs, outputs=predictions)
 
     # ====================================================
