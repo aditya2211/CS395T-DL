@@ -150,7 +150,7 @@ def main(args):
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
     x = Dense(1024, activation='relu')(x)
-    predictions = Dense(2)(x)
+    predictions = Dense((len(grid[0]) - 1) * len(grid[0]) + len(grid[1]))(x)
     model = Model(inputs=base_model.inputs, outputs=predictions)
 
     # ====================================================
@@ -244,6 +244,8 @@ def main(args):
             ),
         ],
     )
+
+
     model.save(os.path.join(model_path, 'model_fine_final.h5'))
 
 
