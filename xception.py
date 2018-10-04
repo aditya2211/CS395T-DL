@@ -26,7 +26,7 @@ parser.add_argument('--dataset_root', default= config.dataset_root)
 parser.add_argument('--result_root', default= config.result_root)
 parser.add_argument('--model_name', default= config.model_name)
 parser.add_argument('--logging_root', default = config.logging_root)
-parser.add_argument('--epochs_pre', type=int, default=5)
+parser.add_argument('--epochs_pre', type=int, default=10)
 parser.add_argument('--epochs_fine', type=int, default=5)
 parser.add_argument('--batch_size_pre', type=int, default=32)
 parser.add_argument('--batch_size_fine', type=int, default=16)
@@ -35,7 +35,7 @@ parser.add_argument('--lr_fine', type=float, default=1e-4)
 parser.add_argument('--snapshot_period_pre', type=int, default=1)
 parser.add_argument('--snapshot_period_fine', type=int, default=1)
 
-def generate_from_paths_and_labels(input_paths, labels, batch_size, input_size=(261,200)):
+def generate_from_paths_and_labels(input_paths, labels, batch_size, input_size=(261,150)):
     labels = np.array(labels)
     num_samples = len(input_paths)
     while 1:
@@ -74,6 +74,109 @@ def gridify(labels, grid):
         grid_labels.append(lat_index * len(grid[1]) + long_index)
     return grid_labels
 
+
+def get_membership_point(p, x_mid, y_mid):
+    if p[0] < x_mid:
+        a = 0
+    else:
+        a = 1
+    if p[1] < y_mid:
+        b = 0
+    else:
+        b = 2
+
+    return a+b
+
+class grid:
+    def __init__(self, x1, x2, y1, y2, labels, path):
+        self.x1 = x1
+        self.x2 = x2
+        self.y1 = y1
+        self.y2 = y2
+        self.labels = labels
+        self.children = []
+        self.path = path
+
+    def __repr__(self):
+        string = "X_min_coordinate:%f\nX_max_coordinate:%f\nY_min_coordinate:%f\nY_min_coordinate:%f\n" % (self.x1, self.x2, self.y1, self.y2)
+        string += "Path: %s\n" % (self.path)
+        if len(self.labels) >= 2:
+            string += "Points:[%f, %f],[%f,%f]" % (self.labels[0][0], self.labels[0][1], self.labels[1][0], self.labels[1][1])
+        return string
+
+    def create_children(self):
+        x_mid = float(self.x1 + self.x2)/float(2)
+        y_mid = float(self.y1 + self.y2)/float(2)
+        #print "creating children"
+
+        mem = {0: [], 1: [], 2: [], 3: []}
+        for p in self.labels:
+            membership = get_membership_point(p, x_mid, y_mid)
+            mem[membership].append(p)
+
+        g0 = grid(self.x1, x_mid, self.y1, y_mid, mem[0],  self.path + "_0")
+        g1 = grid(x_mid, self.x2, self.y1, y_mid, mem[1],  self.path + "_1")
+        g2 = grid(self.x1, x_mid, y_mid, self.y2, mem[2],  self.path + "_2")
+        g3 = grid(x_mid, self.x2, y_mid, self.y2, mem[3],  self.path + "_3")
+
+        self.children.append(g0)
+        self.children.append(g1)
+        self.children.append(g2)
+        self.children.append(g3)
+        
+        return self.children
+
+    def check_conditions(self, max_x, max_y, max_label):
+        if len(self.labels) == 0:
+            return True
+        if abs(self.x1 - self.x2) > max_x:
+            return False
+        elif abs(self.y1 - self.y2) > max_y:
+            return False
+        elif len(self.labels) > max_label:
+            return False
+        else:
+            return True
+
+
+
+def grid_recursive(grid, max_x, max_y, max_label):
+    if not grid.check_conditions(max_x, max_y, max_label):
+        children = grid.create_children()
+        for child in grid.children:
+            grid_recursive(child, max_x, max_y, max_label)
+
+
+def create_grid_recursive(points, max_x, max_y, max_label):
+    lat_min = np.min([x[0] for x in points])
+    lat_max = np.max([x[0] for x in points])
+    lon_min = np.min([x[1] for x in points])
+    lon_max = np.max([x[1] for x in points])
+
+    grid_r = grid(lat_min, lat_max, lon_min, lon_max, points, "0")
+    grid_recursive(grid_r, max_x, max_y, max_label)
+    return grid_r
+
+def gridify_recursive_point(grid, p):
+
+    if len(grid.children) == 0:
+        return(grid.path)
+
+    else:
+        x_mid = float(grid.x1 + grid.x2)/float(2)
+        y_mid = float(grid.y1 + grid.y2)/float(2)
+
+        m = get_membership_point(p, x_mid, y_mid)
+        #print m
+        return(gridify_recursive_point(grid.children[m], p))
+
+
+def gridify_recursive(grid, labels):
+    y_labels = []
+    for p in labels:
+        y_labels.append(gridify_recursive_point(grid, p))
+    print y_labels
+
 def main(args):
 
     # ====================================================
@@ -92,7 +195,7 @@ def main(args):
         gold_tags = label.rstrip().split('\t')
         values[gold_tags[0]] = [float(gold_tags[1]), float(gold_tags[2])]
 
-    for image_name in os.listdir(os.path.join(args.dataset_root, 'train')):
+    for image_name in os.listdir(os.path.join(args.dataset_root, 'train'))[0:1000]:
         path = os.path.join(os.path.join(args.dataset_root, 'train'), image_name)
         if imghdr.what(path) == None:
             continue
@@ -104,7 +207,7 @@ def main(args):
         gold_tags = label.rstrip().split('\t')
         values[gold_tags[0]] = [float(gold_tags[1]), float(gold_tags[2])]
 
-    for image_name in os.listdir(os.path.join(args.dataset_root, 'valid')):
+    for image_name in os.listdir(os.path.join(args.dataset_root, 'valid'))[0:1000]:
         path = os.path.join(os.path.join(args.dataset_root, 'valid'), image_name)
         if imghdr.what(path) == None:
             # this is not an image file
@@ -113,9 +216,19 @@ def main(args):
         val_input_paths.append(path)
     # convert to one-hot-vector format
 
-    grid = create_grid(train_labels)
-    train_grid_labels = gridify(train_labels, grid)
-    val_grid_labels = gridify(val_labels, grid)
+    if config.loss_type == "classification":
+        #grid = create_grid(train_labels)
+        #train_grid_labels = gridify(train_labels, grid)
+        #val_grid_labels = gridify(val_labels, grid)
+        max_labels = 50
+        max_x_distance = 0.5
+        max_y_distance = 0.5
+        grid = create_grid_recursive(train_labels, max_x_distance, max_y_distance, max_labels)
+        print repr(grid)
+        train_grid_labels = gridify_recursive(grid, train_labels)
+        val_grid_labels = gridify_recursive(grid, val_labels)
+        exit()
+        
 
     # convert to numpy array
     train_input_paths = np.array(train_input_paths)
@@ -131,7 +244,11 @@ def main(args):
     if os.path.exists(os.path.join(args.result_root, args.model_name)) == False:
         os.makedirs(os.path.join(args.result_root, args.model_name))
 
-    model_path = os.path.join(args.result_root, args.model_name)
+    model_path = os.path.join(args.result_root, args.model_name, str(len(grid[0])) + "_" + str(len(grid[1])))
+
+    if os.path.exists(model_path) == False:
+        os.makedirs(model_path)
+    
     with open(os.path.join(model_path, 'grid.pkl'), 'wb') as gridpickle:
         pkl.dump(grid, gridpickle)
     # ====================================================
@@ -140,7 +257,7 @@ def main(args):
     # instantiate pre-trained Xception model
     # the default input shape is (299, 299, 3)
     # NOTE: the top classifier is not included
-    base_model = eval(args.model_name)(include_top=False, weights='imagenet', input_shape=(261,200,3))
+    base_model = eval(args.model_name)(include_top=False, weights='imagenet', input_shape=(261,150,3))
 
     """
     if args.model_name == "Xception":
@@ -156,6 +273,7 @@ def main(args):
         predictions = Dense(2)(x)
     elif config.loss_type == "classification":
         predictions = Dense(len(grid[0])*len(grid[1]), activation='softmax')(x)
+    
     model = Model(inputs=base_model.inputs, outputs=predictions)
 
     # ====================================================
@@ -177,6 +295,7 @@ def main(args):
         model.compile(
             loss='sparse_categorical_crossentropy',
             optimizer=Adam(lr=args.lr_pre),
+            metrics=['acc']
         )
         train_l = train_grid_labels
         val_l = val_grid_labels
@@ -224,6 +343,7 @@ def main(args):
         model.compile(
             loss='sparse_categorical_crossentropy',
             optimizer=Adam(lr=args.lr_pre),
+            metrics=['acc']
         )
 
     # train
