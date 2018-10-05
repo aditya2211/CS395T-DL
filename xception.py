@@ -26,7 +26,7 @@ parser.add_argument('--dataset_root', default= config.dataset_root)
 parser.add_argument('--result_root', default= config.result_root)
 parser.add_argument('--model_name', default= config.model_name)
 parser.add_argument('--logging_root', default = config.logging_root)
-parser.add_argument('--epochs_pre', type=int, default=10)
+parser.add_argument('--epochs_pre', type=int, default=5)
 parser.add_argument('--epochs_fine', type=int, default=5)
 parser.add_argument('--batch_size_pre', type=int, default=32)
 parser.add_argument('--batch_size_fine', type=int, default=16)
@@ -175,7 +175,7 @@ def gridify_recursive(grid, labels):
     y_labels = []
     for p in labels:
         y_labels.append(gridify_recursive_point(grid, p))
-    print y_labels
+    return y_labels
 
 def main(args):
 
@@ -195,7 +195,7 @@ def main(args):
         gold_tags = label.rstrip().split('\t')
         values[gold_tags[0]] = [float(gold_tags[1]), float(gold_tags[2])]
 
-    for image_name in os.listdir(os.path.join(args.dataset_root, 'train'))[0:1000]:
+    for image_name in os.listdir(os.path.join(args.dataset_root, 'train'))[0:100]:
         path = os.path.join(os.path.join(args.dataset_root, 'train'), image_name)
         if imghdr.what(path) == None:
             continue
@@ -207,7 +207,7 @@ def main(args):
         gold_tags = label.rstrip().split('\t')
         values[gold_tags[0]] = [float(gold_tags[1]), float(gold_tags[2])]
 
-    for image_name in os.listdir(os.path.join(args.dataset_root, 'valid'))[0:1000]:
+    for image_name in os.listdir(os.path.join(args.dataset_root, 'valid'))[0:100]:
         path = os.path.join(os.path.join(args.dataset_root, 'valid'), image_name)
         if imghdr.what(path) == None:
             # this is not an image file
@@ -217,18 +217,22 @@ def main(args):
     # convert to one-hot-vector format
 
     if config.loss_type == "classification":
-        #grid = create_grid(train_labels)
-        #train_grid_labels = gridify(train_labels, grid)
-        #val_grid_labels = gridify(val_labels, grid)
-        max_labels = 50
-        max_x_distance = 0.5
-        max_y_distance = 0.5
-        grid = create_grid_recursive(train_labels, max_x_distance, max_y_distance, max_labels)
-        print repr(grid)
-        train_grid_labels = gridify_recursive(grid, train_labels)
-        val_grid_labels = gridify_recursive(grid, val_labels)
-        exit()
-        
+        if config.grid_type == "recursive":
+            max_labels = config.max_labels
+            max_x_distance = config.max_x_distance
+            max_y_distance = config.max_y_distance
+            grid = create_grid_recursive(train_labels, max_x_distance, max_y_distance, max_labels)
+            train_grid_labels_paths = gridify_recursive(grid, train_labels)
+            val_grid_labels_paths = gridify_recursive(grid, val_labels)
+            mapping = dict(enumerate(set(train_grid_labels_paths + val_grid_labels_paths)))
+            inv_mapping = {v: k for k, v in mapping.items()}
+            train_grid_labels = [inv_mapping[x] for x in train_grid_labels_paths]
+            val_grid_labels = [inv_mapping[x] for x in val_grid_labels_paths]
+        else:
+            grid = create_grid(train_labels)
+            train_grid_labels = gridify(train_labels, grid)
+            val_grid_labels = gridify(val_labels, grid)
+  
 
     # convert to numpy array
     train_input_paths = np.array(train_input_paths)
@@ -244,13 +248,20 @@ def main(args):
     if os.path.exists(os.path.join(args.result_root, args.model_name)) == False:
         os.makedirs(os.path.join(args.result_root, args.model_name))
 
-    model_path = os.path.join(args.result_root, args.model_name, str(len(grid[0])) + "_" + str(len(grid[1])))
+    if config.loss_type == "classification":
+        if config.grid_type == "recursive":
+            model_path = os.path.join(args.result_root, args.model_name, "recursive" + str(max_x_distance) + "_" + str(max_y_distance) + "_" + str(max_labels))
+        else:
+            model_path = os.path.join(args.result_root, args.model_name, str(len(grid[0])) + "_" + str(len(grid[1])))
 
-    if os.path.exists(model_path) == False:
-        os.makedirs(model_path)
-    
-    with open(os.path.join(model_path, 'grid.pkl'), 'wb') as gridpickle:
-        pkl.dump(grid, gridpickle)
+        if os.path.exists(model_path) == False:
+            os.makedirs(model_path)
+        
+        with open(os.path.join(model_path, 'grid.pkl'), 'wb') as gridpickle:
+            pkl.dump(grid, gridpickle)
+
+        with open(os.path.join(model_path, 'grid_mapping.pkl'), 'wb') as gridmappingpickle:
+            pkl.dump(mapping, gridmappingpickle)
     # ====================================================
     # Build a custom Xception
     # ====================================================
@@ -259,12 +270,7 @@ def main(args):
     # NOTE: the top classifier is not included
     base_model = eval(args.model_name)(include_top=False, weights='imagenet', input_shape=(261,150,3))
 
-    """
-    if args.model_name == "Xception":
-        base_model = Xception(include_top=False, weights='imagenet', input_shape=(261,150,3))
-    elif args.model_name == "VGG19":
-        base_model = VGG19(include_top=False, weights='imagenet', input_shape=(261,150,3))
-    """
+
     # create a custom top classifier
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
@@ -272,7 +278,8 @@ def main(args):
     if config.loss_type == "regression":
         predictions = Dense(2)(x)
     elif config.loss_type == "classification":
-        predictions = Dense(len(grid[0])*len(grid[1]), activation='softmax')(x)
+        #predictions = Dense(len(grid[0])*len(grid[1]), activation='softmax')(x)
+        predictions = Dense(len(mapping), activation='softmax')(x)
     
     model = Model(inputs=base_model.inputs, outputs=predictions)
 
