@@ -12,20 +12,29 @@ import pickle as pkl
 from xception import *
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', default = os.path.join(config.result_root, config.model_name))
-parser.add_argument('--model', default =  "model_fine_final.h5")
+parser.add_argument('--model', default =  "model_pre_final.h5")
 parser.add_argument('--valid_image_path', default = "../../geo/valid/")
-parser.add_argument('--output_file', default = "output_"+ config.model_name +"_29_20.txt")
+parser.add_argument('--output_file', default = "output_"+ config.model_name +"_recursive_pre.txt")
 parser.add_argument('--batch_size', type=int, default=50)
 parser.add_argument('--convertToLL', action="store_true", default=False)
 
+def get_grid_from_path(grid, path):
+    
+    if len(path) == 1:
+        return grid
+    else:
+        g = grid
+        for p in path[1:]:
+            g = g.children[p]
+        return g
+
+
 def main(args):
-    
-    
     if config.loss_type == "classification":
         if config.grid_type == "recursive":
             model_path_comp = os.path.join(args.model_path, "recursive" + str(config.max_x_distance) + "_" + str(config.max_y_distance) + "_" + str(config.max_labels))
             grid = pkl.load(open(os.path.join(model_path_comp, 'grid.pkl'), "rb"))
-            gridmapping = pkl.load(open(os.path.join(model_path_comp, 'grid_mapping.pkl'), "rb"))
+            grid_mapping = pkl.load(open(os.path.join(model_path_comp, 'grid_mapping.pkl'), "rb"))
             model_path_comp = os.path.join(model_path_comp, args.model)
         else:
             model_path_comp = os.path.join(args.model_path,  args.model)
@@ -64,9 +73,14 @@ def main(args):
                 f.write("%s\t%f\t%f\n" %(image_names[i+j], pred[j][0], pred[j][1]))
             elif config.loss_type == "classification":
                 if config.grid_type == "recursive":
-                    print(np.argmax(pred, axis = 1))
-                    continue
-                    grid_path = grid_mapping[pred].split()
+                    p = np.argmax(pred[j])
+                    grid_path = grid_mapping[p].split("_")
+                    grid_path = [int(x) for x in grid_path]
+                    grid_t = get_grid_from_path(grid, grid_path)
+                    lat = (grid_t.x1 + grid_t.x2)/2
+                    lon = (grid_t.y1 + grid_t.y2)/2
+                    f.write("%s\t%f\t%f\n" %(image_names[i+j], lat, lon))
+
                 else:
                     lat_index = int(np.argmax(pred[j])/len(grid[1]))
                     lon_index = np.argmax(pred[j])%len(grid[1])

@@ -26,8 +26,8 @@ parser.add_argument('--dataset_root', default= config.dataset_root)
 parser.add_argument('--result_root', default= config.result_root)
 parser.add_argument('--model_name', default= config.model_name)
 parser.add_argument('--logging_root', default = config.logging_root)
-parser.add_argument('--epochs_pre', type=int, default=5)
-parser.add_argument('--epochs_fine', type=int, default=5)
+parser.add_argument('--epochs_pre', type=int, default = 5)
+parser.add_argument('--epochs_fine', type=int, default = 10)
 parser.add_argument('--batch_size_pre', type=int, default=32)
 parser.add_argument('--batch_size_fine', type=int, default=16)
 parser.add_argument('--lr_pre', type=float, default=1e-3)
@@ -195,7 +195,7 @@ def main(args):
         gold_tags = label.rstrip().split('\t')
         values[gold_tags[0]] = [float(gold_tags[1]), float(gold_tags[2])]
 
-    for image_name in os.listdir(os.path.join(args.dataset_root, 'train'))[0:100]:
+    for image_name in os.listdir(os.path.join(args.dataset_root, 'train')):
         path = os.path.join(os.path.join(args.dataset_root, 'train'), image_name)
         if imghdr.what(path) == None:
             continue
@@ -207,7 +207,7 @@ def main(args):
         gold_tags = label.rstrip().split('\t')
         values[gold_tags[0]] = [float(gold_tags[1]), float(gold_tags[2])]
 
-    for image_name in os.listdir(os.path.join(args.dataset_root, 'valid'))[0:100]:
+    for image_name in os.listdir(os.path.join(args.dataset_root, 'valid')):
         path = os.path.join(os.path.join(args.dataset_root, 'valid'), image_name)
         if imghdr.what(path) == None:
             # this is not an image file
@@ -232,8 +232,8 @@ def main(args):
             grid = create_grid(train_labels)
             train_grid_labels = gridify(train_labels, grid)
             val_grid_labels = gridify(val_labels, grid)
-  
 
+    print({x:train_grid_labels.count(x) for x in set(train_grid_labels)})
     # convert to numpy array
     train_input_paths = np.array(train_input_paths)
     val_input_paths = np.array(val_input_paths)
@@ -241,6 +241,7 @@ def main(args):
     print("Training on %d images and labels" % (len(train_input_paths)))
     print("Validation on %d images and labels" % (len(val_input_paths)))
 
+    exit()
     # create a directory where results will be saved (if necessary)
     if os.path.exists(args.result_root) == False:
         os.makedirs(args.result_root)
@@ -306,6 +307,7 @@ def main(args):
         )
         train_l = train_grid_labels
         val_l = val_grid_labels
+
 
     tensorboard = TensorBoard(log_dir = "{}/{}".format(args.logging_root,time()))
     # train
